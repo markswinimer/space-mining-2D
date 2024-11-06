@@ -3,7 +3,9 @@
 --- !u!78 &1
 TagManager:
   serializedVersion: 3
-  tags: []
+  tags:
+  - Ore
+  - Tethered
   layers:
   - Default
   - TransparentFX
@@ -19,8 +21,8 @@ TagManager:
   - Asteroid
   - Ore
   - Gadget
-  - 
-  - 
+  - Ship
+  - Station
   - 
   - 
   - 

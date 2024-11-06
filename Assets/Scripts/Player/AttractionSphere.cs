@@ -9,16 +9,23 @@ public class AttractionSphere : MonoBehaviour
     [SerializeField] private float maxDistance = 3f;   // Maximum tether distance for strong pull
     [SerializeField] private float removeDistance = 5f; // Distance at which the ore is released
     [SerializeField] private float pullStrength = 2f;  // Base strength of the pulling force
-
     [SerializeField] private int maxTetheredItems;
 
     private Dictionary<GameObject, LineRenderer> activeLines = new Dictionary<GameObject, LineRenderer>();
-
-    InputAction removeOreAction;
+    private InputAction removeOreAction;
 
     private void Awake()
     {
         removeOreAction = InputSystem.actions.FindAction("Interact2");
+
+        if (removeOreAction != null)
+        {
+            removeOreAction.Enable();  // Enable the action to listen for input
+        }
+        else
+        {
+            Debug.LogError("Remove ore action (Interact2) not found!");
+        }
     }
 
     private void OnTriggerEnter2D(Collider2D other)
@@ -27,56 +34,55 @@ public class AttractionSphere : MonoBehaviour
 
         if (other.gameObject.layer == LayerMask.NameToLayer(oreLayerName))
         {
-            // Check if the ore already has a LineRenderer component
             LineRenderer line = other.gameObject.GetComponent<LineRenderer>();
             if (line == null)
             {
-                // Add LineRenderer only if it doesn’t already exist
+                other.gameObject.tag = "Tethered";
+
+                // Add LineRenderer and configure it
                 line = other.gameObject.AddComponent<LineRenderer>();
                 ConfigureLineRenderer(line);
-                activeLines.Add(other.gameObject, line);
             }
-            else
+
+            // Only add to activeLines if it’s not already in the dictionary
+            if (!activeLines.ContainsKey(other.gameObject))
             {
-                // If it already has a LineRenderer, make sure it's tracked in the dictionary
-                if (!activeLines.ContainsKey(other.gameObject))
-                {
-                    activeLines.Add(other.gameObject, line);
-                }
+                activeLines.Add(other.gameObject, line);
             }
         }
     }
 
     private void OnTriggerExit2D(Collider2D other)
     {
-        if (activeLines.ContainsKey(other.gameObject) && Vector2.Distance(other.transform.position, shipTransform.position) >= removeDistance)
+        if (activeLines.ContainsKey(other.gameObject))
         {
-            // Only remove the line and release ore if it exceeds the remove distance
-            Destroy(activeLines[other.gameObject]);
-            activeLines.Remove(other.gameObject);
+            float distanceToShip = Vector2.Distance(other.transform.position, shipTransform.position);
+            if (distanceToShip >= removeDistance)
+            {
+                RemoveOre(other.gameObject);
+            }
         }
     }
 
     private void Update()
     {
-        if (removeOreAction.triggered)
+        if (removeOreAction != null && removeOreAction.triggered)
         {
+            Debug.Log("Remove ore action triggered!");
             RemoveNewestOre();
         }
 
-        foreach (var entry in activeLines)
+        // Update lines and apply pulling force
+        foreach (var oreEntry in new List<GameObject>(activeLines.Keys))
         {
-            GameObject ore = entry.Key;
-            LineRenderer line = entry.Value;
+            if (oreEntry == null) continue;
 
-            // Update line positions
+            LineRenderer line = activeLines[oreEntry];
             line.SetPosition(0, shipTransform.position);
-            line.SetPosition(1, ore.transform.position);
+            line.SetPosition(1, oreEntry.transform.position);
 
-            // Apply pulling force based on distance
-            PullOreWithDistanceEffect(ore);
+            PullOreWithDistanceEffect(oreEntry);
         }
-        
     }
 
     private void ConfigureLineRenderer(LineRenderer line)
@@ -97,35 +103,55 @@ public class AttractionSphere : MonoBehaviour
         Vector2 directionToShip = (shipTransform.position - ore.transform.position).normalized;
         float distanceToShip = Vector2.Distance(shipTransform.position, ore.transform.position);
 
-        // Only apply pull if within maxDistance and not exceeding removeDistance
         if (distanceToShip < removeDistance)
         {
-            // Increase the pull strength as the ore gets closer to maxDistance
             float dynamicPullStrength = pullStrength * (distanceToShip / maxDistance);
             oreRb.AddForce(directionToShip * dynamicPullStrength);
         }
     }
 
-
     public void RemoveNewestOre()
     {
-        // Check if there is at least one ore in the activeLines dictionary
         if (activeLines.Count > 0)
         {
-            // Get the newest ore (last added entry in the dictionary)
             GameObject newestOre = null;
             foreach (var entry in activeLines)
             {
-                newestOre = entry.Key;  // The last entry in the foreach loop is the newest
+                newestOre = entry.Key;
             }
 
-            // Remove the newest ore's line renderer and dictionary entry
             if (newestOre != null)
             {
-                Destroy(activeLines[newestOre]);
-                activeLines.Remove(newestOre);
-                Debug.Log("Removed newest ore: " + newestOre.name);
+                Debug.Log("should be removed");
+                RemoveOre(newestOre);
             }
+        }
+    }
+
+    private void RemoveOre(GameObject ore)
+    {
+        if (!activeLines.ContainsKey(ore)) return;
+        Debug.Log("Removing ore: " + ore.name);
+        LineRenderer line = activeLines[ore];
+        Debug.Log("Removing line: " + line.name);
+        if (line != null)
+        {
+            Destroy(line);
+        }
+
+        ore.tag = "Untagged";
+        activeLines.Remove(ore);
+
+        UntetherOre(ore);
+    }
+
+    public void UntetherOre(GameObject ore)
+    {
+        Collider2D collider = ore.GetComponent<Collider2D>();
+        if (collider != null)
+        {
+            collider.enabled = false;
+            collider.enabled = true;
         }
     }
 }
